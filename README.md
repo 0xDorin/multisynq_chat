@@ -1,24 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Multisync Chat
 
-## Getting Started
+Next.js와 Multisynq를 사용한 실시간 멀티 유저 채팅 애플리케이션입니다.
 
-First, run the development server:
+## 🚀 시작하기
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### 1. API 키 설정
+
+1. `src/config/multisynq.ts` 파일을 열어주세요
+2. `apiKey` 값을 발급받은 API 키로 변경하세요:
+
+```typescript
+export const MULTISYNQ_CONFIG = {
+  apiKey: "your_actual_api_key_here", // 여기에 실제 API 키를 입력
+  appId: "io.multisync.chat",
+  name: "public",
+  password: "none",
+};
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. 개발 서버 실행
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+yarn dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+브라우저에서 [http://localhost:3000](http://localhost:3000)을 열어 결과를 확인하세요.
+
+## 🎯 기능
+
+- 실시간 멀티 유저 채팅
+- 자동 닉네임 할당
+- 20분 비활성 후 자동 리셋
+- `/reset` 명령어로 수동 리셋
+- 반응형 디자인
+
+## 🔧 기술 스택
+
+- **Next.js 15.3.2**
+- **TypeScript**
+- **Tailwind CSS**
+- **@multisynq/client** (실시간 동기화)
+- **yarn** (패키지 매니저)
 
 ## Learn More
 
