@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, type MultisynqSession } from '@multisynq/client';
 import { ChatModel } from '@/lib/ChatModel';
 
@@ -9,121 +9,125 @@ interface ChatViewProps {
   session?: MultisynqSession<any> | null;
 }
 
+// Multisynq View 클래스 - 모델과 React 상태를 연결하는 브릿지
 export class ChatView extends View {
   private model: ChatModel;
-  private textIn: HTMLInputElement | null = null;
-  private textOut: HTMLDivElement | null = null;
-  private nickname: HTMLDivElement | null = null;
-  private viewCount: HTMLDivElement | null = null;
-  private sendButton: HTMLButtonElement | null = null;
+  private onHistoryUpdate?: (history: { viewId: string; html: string }[]) => void;
+  private onViewInfoUpdate?: (nickname: string, viewCount: number) => void;
 
   constructor(model: ChatModel) {
     super(model);
     this.model = model;
 
-    // Subscribe to events
-    this.subscribe("history", "refresh", this.refreshHistory);
-    this.subscribe("viewInfo", "refresh", this.refreshViewInfo);
+    // 모델 이벤트 구독 (View에서만 가능)
+    this.subscribe("history", "refresh", this.handleHistoryRefresh);
+    this.subscribe("viewInfo", "refresh", this.handleViewInfoRefresh);
 
-    // Initialize display
-    this.refreshHistory();
-    this.refreshViewInfo();
+    // 초기 상태 동기화
+    this.handleHistoryRefresh();
+    this.handleViewInfoRefresh();
 
-    // Check if alone and reset if needed
+    // 혼자 있고 기존 채팅에 내가 참여하지 않았다면 리셋
     if (this.model.getParticipants() === 1 &&
         !this.model.getHistory().find(item => item.viewId === this.viewId)) {
       this.publish("input", "reset", "for new participants");
     }
   }
 
-  send() {
-    if (!this.textIn) return;
-    
-    const text = this.textIn.value;
-    this.textIn.value = "";
-    
-    if (text === "/reset") {
+  // React 상태 업데이트 콜백 등록
+  setUpdateCallbacks(
+    onHistoryUpdate: (history: { viewId: string; html: string }[]) => void,
+    onViewInfoUpdate: (nickname: string, viewCount: number) => void
+  ) {
+    this.onHistoryUpdate = onHistoryUpdate;
+    this.onViewInfoUpdate = onViewInfoUpdate;
+  }
+
+  private handleHistoryRefresh = () => {
+    const history = this.model.getHistory();
+    this.onHistoryUpdate?.(history);
+  };
+
+  private handleViewInfoRefresh = () => {
+    const views = this.model.getViews();
+    const nickname = views.get(this.viewId) || '';
+    const viewCount = this.model.getParticipants();
+    this.onViewInfoUpdate?.(nickname, viewCount);
+  };
+
+  // 채팅 전송
+  sendMessage(text: string) {
+    if (text.trim() === '/reset') {
       this.publish("input", "reset", "at user request");
     } else {
       this.publish("input", "newPost", { viewId: this.viewId, text });
     }
   }
 
-  refreshViewInfo() {
-    if (!this.nickname || !this.viewCount) return;
-    
-    const views = this.model.getViews();
-    const myNickname = views.get(this.viewId);
-    const participants = this.model.getParticipants();
-    
-    this.nickname.innerHTML = `<b>Nickname:</b> ${myNickname}`;
-    this.viewCount.innerHTML = `<b>Total Views:</b> ${participants}`;
-  }
-
-  refreshHistory() {
-    if (!this.textOut) return;
-    
-    const history = this.model.getHistory();
-    const historyHtml = history.map(item => item.html).join("<br>");
-    
-    this.textOut.innerHTML = `<b>Welcome to Multisynq Chat!</b><br><br>${historyHtml}`;
-    this.textOut.scrollTop = Math.max(10000, this.textOut.scrollHeight);
-  }
-
-  // React component methods
-  setRefs(textIn: HTMLInputElement | null, textOut: HTMLDivElement | null, 
-          nickname: HTMLDivElement | null, viewCount: HTMLDivElement | null,
-          sendButton: HTMLButtonElement | null) {
-    this.textIn = textIn;
-    this.textOut = textOut;
-    this.nickname = nickname;
-    this.viewCount = viewCount;
-    this.sendButton = sendButton;
-
-    if (this.sendButton) {
-      this.sendButton.onclick = () => this.send();
-    }
+  // 정리
+  cleanup() {
+    this.detach();
   }
 }
 
-// React wrapper component
+// React 컴포넌트 - UI 렌더링 및 사용자 상호작용
 export function ChatViewComponent({ model, session }: ChatViewProps) {
+  // React 상태
+  const [history, setHistory] = useState<{ viewId: string; html: string }[]>([]);
+  const [nickname, setNickname] = useState<string>('');
+  const [viewCount, setViewCount] = useState<number>(1);
+  const [input, setInput] = useState('');
   const [chatView, setChatView] = useState<ChatView | null>(null);
-  const textInRef = useRef<HTMLInputElement>(null);
   const textOutRef = useRef<HTMLDivElement>(null);
-  const nicknameRef = useRef<HTMLDivElement>(null);
-  const viewCountRef = useRef<HTMLDivElement>(null);
-  const sendButtonRef = useRef<HTMLButtonElement>(null);
 
+  // ChatView 인스턴스 생성 및 콜백 연결
   useEffect(() => {
+    if (!model) return;
+
     const view = new ChatView(model);
+    
+    // React 상태 업데이트 콜백 등록
+    view.setUpdateCallbacks(
+      (newHistory) => setHistory([...newHistory]),
+      (newNickname, newViewCount) => {
+        setNickname(newNickname);
+        setViewCount(newViewCount);
+      }
+    );
+
     setChatView(view);
 
     return () => {
-      // Cleanup if needed
+      view.cleanup();
     };
   }, [model]);
 
+  // 채팅 입력 핸들러
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setInput(e.target.value);
+  }, []);
+
+  const handleSend = useCallback(() => {
+    if (!input.trim() || !chatView) return;
+    chatView.sendMessage(input);
+    setInput('');
+  }, [input, chatView]);
+
+  const handleKeyPress = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSend();
+  }, [handleSend]);
+
+  // 채팅 스크롤 자동 아래로
   useEffect(() => {
-    if (chatView) {
-      chatView.setRefs(
-        textInRef.current,
-        textOutRef.current,
-        nicknameRef.current,
-        viewCountRef.current,
-        sendButtonRef.current
-      );
+    if (textOutRef.current) {
+      textOutRef.current.scrollTop = textOutRef.current.scrollHeight;
     }
-  }, [chatView]);
+  }, [history]);
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      chatView?.send();
-    }
-  };
-
-  // 참가자 수 표시용
-  const participantCount = session?.view?.viewCount ?? 1;
+  // 닉네임 fallback 처리
+  const realNickname = nickname || (
+    session?.view?.viewId ? model.getViews().get(session.view.viewId) : ''
+  ) || 'Loading...';
 
   return (
     <div className="max-w-4xl mx-auto p-6">
@@ -131,42 +135,49 @@ export function ChatViewComponent({ model, session }: ChatViewProps) {
         <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">
           Multisynq Chat
         </h1>
-        {/* 참가자 수 표시 */}
-        <div className="flex justify-end mb-2">
-          <span className="text-sm text-gray-600">참가자 수: {participantCount}</span>
+        
+        {/* 사용자 정보 */}
+        <div className="flex justify-between items-center mb-4 p-3 bg-gray-50 rounded">
+          <div className="text-sm text-gray-600">
+            <b>Nickname:</b> {realNickname}
+          </div>
+          <div className="text-sm text-gray-600">
+            <b>Total Views:</b> {viewCount}
+          </div>
         </div>
         
-        {/* User Info */}
-        <div className="flex justify-between items-center mb-4 p-3 bg-gray-50 rounded">
-          <div ref={nicknameRef} className="text-sm text-gray-600"></div>
-          <div ref={viewCountRef} className="text-sm text-gray-600"></div>
-        </div>
-
-        {/* Chat History */}
-        <div 
+        {/* 채팅 히스토리 */}
+        <div
           ref={textOutRef}
           className="h-96 overflow-y-auto p-4 bg-gray-50 rounded border mb-4 text-sm text-gray-800"
           style={{ whiteSpace: 'pre-wrap' }}
-        ></div>
-
-        {/* Input Area */}
+        >
+          <b>Welcome to Multisynq Chat!</b>
+          <br /><br />
+          {history.map((item, idx) => (
+            <div key={idx} dangerouslySetInnerHTML={{ __html: item.html }} />
+          ))}
+        </div>
+        
+        {/* 입력 영역 */}
         <div className="flex gap-2">
           <input
-            ref={textInRef}
             type="text"
             placeholder="Type your message here..."
             className="flex-1 px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+            value={input}
+            onChange={handleInputChange}
             onKeyPress={handleKeyPress}
           />
           <button
-            ref={sendButtonRef}
             className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onClick={handleSend}
           >
             Send
           </button>
         </div>
-
-        {/* Instructions */}
+        
+        {/* 사용법 안내 */}
         <div className="mt-4 p-3 bg-blue-50 rounded text-sm text-blue-800">
           <p><strong>Instructions:</strong></p>
           <ul className="list-disc list-inside mt-1 space-y-1">
