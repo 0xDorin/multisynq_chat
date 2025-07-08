@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Session } from '@multisynq/client';
+import { Session, type MultisynqSession } from '@multisynq/client';
 import { ChatModel } from '@/lib/ChatModel';
 import { ChatViewComponent } from '@/components/ChatView';
 import { MULTISYNQ_CONFIG } from '@/config/multisynq';
 
 export default function Home() {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<MultisynqSession<any> | null>(null);
   const [model, setModel] = useState<ChatModel | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,6 @@ export default function Home() {
           password: MULTISYNQ_CONFIG.password,
           model: ChatModel
         });
-        
         setSession(sessionResult);
         // Get the root model using wellKnownModel
         const rootModel = sessionResult.view.wellKnownModel("modelRoot") as ChatModel;
@@ -36,12 +35,6 @@ export default function Home() {
     };
 
     connectToSession();
-
-    return () => {
-      if (session) {
-        session.leave();
-      }
-    };
   }, []);
 
   if (error) {
