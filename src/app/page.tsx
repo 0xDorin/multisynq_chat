@@ -15,7 +15,6 @@ export default function Home() {
   useEffect(() => {
     const connectToSession = async () => {
       try {
-        // Join the session using Session.join static method
         const sessionResult = await Session.join({
           apiKey: MULTISYNQ_CONFIG.apiKey,
           appId: MULTISYNQ_CONFIG.appId,
@@ -24,7 +23,6 @@ export default function Home() {
           model: ChatModel
         });
         setSession(sessionResult);
-        // Get the root model using wellKnownModel
         const rootModel = sessionResult.view.wellKnownModel("modelRoot") as ChatModel;
         setModel(rootModel);
         setIsConnected(true);
@@ -69,7 +67,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <ChatViewComponent model={model} />
+      <ChatViewComponent model={model} session={session} />
     </div>
   );
 }

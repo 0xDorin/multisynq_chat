@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { View } from '@multisynq/client';
+import { View, type MultisynqSession } from '@multisynq/client';
 import { ChatModel } from '@/lib/ChatModel';
 
 interface ChatViewProps {
   model: ChatModel;
+  session?: MultisynqSession<any> | null;
 }
 
 export class ChatView extends View {
@@ -86,7 +87,7 @@ export class ChatView extends View {
 }
 
 // React wrapper component
-export function ChatViewComponent({ model }: ChatViewProps) {
+export function ChatViewComponent({ model, session }: ChatViewProps) {
   const [chatView, setChatView] = useState<ChatView | null>(null);
   const textInRef = useRef<HTMLInputElement>(null);
   const textOutRef = useRef<HTMLDivElement>(null);
@@ -121,12 +122,19 @@ export function ChatViewComponent({ model }: ChatViewProps) {
     }
   };
 
+  // 참가자 수 표시용
+  const participantCount = session?.view?.viewCount ?? 1;
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-lg p-6">
         <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">
           Multisynq Chat
         </h1>
+        {/* 참가자 수 표시 */}
+        <div className="flex justify-end mb-2">
+          <span className="text-sm text-gray-600">참가자 수: {participantCount}</span>
+        </div>
         
         {/* User Info */}
         <div className="flex justify-between items-center mb-4 p-3 bg-gray-50 rounded">
