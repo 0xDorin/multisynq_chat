@@ -61,7 +61,7 @@ export class ChatModel extends Model {
     return CHAT_COLORS[Math.floor(Math.random() * CHAT_COLORS.length)];
   }
 
-  viewJoin = (viewId: string) => {
+  viewJoin(viewId: string) {
     const existing = this.views.get(viewId);
     if (!existing) {
       const nickname = this.randomName();
@@ -72,14 +72,14 @@ export class ChatModel extends Model {
     this.publish("viewInfo", "refresh");
   }
 
-  viewExit = (viewId: string) => {
+  viewExit(viewId: string) {
     this.participants = Math.max(0, this.participants - 1);
     this.views.delete(viewId);
     this.viewColors.delete(viewId);
     this.publish("viewInfo", "refresh");
   }
 
-  newPost = (post: { viewId: string; text: string }) => {
+  newPost(post: { viewId: string; text: string }) {
     // Input validation
     if (!post.viewId || typeof post.text !== 'string') {
       console.warn('Invalid post data:', post);
@@ -120,12 +120,12 @@ export class ChatModel extends Model {
     this.publish("history", "refresh");
   }
 
-  resetIfInactive = () => {
+  resetIfInactive() {
     if (this.lastPostTime !== this.now() - this.inactivity_timeout_ms) return;
     this.resetHistory("due to inactivity");
   }
 
-  resetHistory = (reason: string) => {
+  resetHistory(reason: string) {
     this.history.length = 0; // More efficient than assignment
     this.lastPostTime = null;
     this.publish("history", "refresh");
