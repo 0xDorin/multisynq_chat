@@ -1,39 +1,30 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, memo } from 'react';
 import { ChatMessage } from './ChatMessage';
 import { ChatMessage as ChatMessageType } from '@/types/chat';
-import { CHAT_STYLES } from '@/constants/chat';
 
 interface ChatMessagesProps {
   history: ChatMessageType[];
   getMessageColor: (viewId: string) => string;
 }
 
-export function ChatMessages({ history, getMessageColor }: ChatMessagesProps) {
+export const ChatMessages = memo(function ChatMessages({ history, getMessageColor }: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // 채팅 스크롤 자동 아래로
+  // Auto scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollTop = messagesEndRef.current.scrollHeight;
-    }
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [history]);
 
   return (
-    <div
-      ref={messagesEndRef}
-      className={CHAT_STYLES.messagesContainer}
-      style={{ whiteSpace: 'pre-wrap' }}
-    >
-      <div className="mb-2 text-[#a259ff] font-semibold">
-        Welcome to Multisynq Chat!
-      </div>
+    <div className="flex-1 overflow-y-auto p-4 text-sm text-gray-100" style={{ backgroundColor: '#181828' }}>
       {history.map((message, idx) => (
         <ChatMessage
-          key={idx}
+          key={`${message.viewId}-${idx}`}
           message={message}
           color={getMessageColor(message.viewId)}
         />
       ))}
+      <div ref={messagesEndRef} />
     </div>
   );
-} 
+}); 

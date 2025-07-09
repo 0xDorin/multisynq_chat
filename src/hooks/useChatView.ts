@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
+import { View } from '@multisynq/client';
 import { ChatView } from '@/components/ChatView';
 import { ChatModel } from '@/lib/ChatModel';
-import { ChatMessage, ChatViewInfo } from '@/types/chat';
+import { ChatMessage } from '@/types/chat';
 import { CHAT_LIMITS } from '@/constants/chat';
 
 interface UseChatViewProps {
-  model: ChatModel;
+  model: View;
   session?: any;
 }
 
@@ -16,11 +17,14 @@ export function useChatView({ model, session }: UseChatViewProps) {
   const [input, setInput] = useState('');
   const [chatView, setChatView] = useState<ChatView | null>(null);
 
+  // ChatModel 가져오기
+  const chatModel = model.wellKnownModel("modelRoot") as ChatModel;
+
   // ChatView 인스턴스 생성 및 콜백 연결
   useEffect(() => {
-    if (!model) return;
+    if (!chatModel) return;
 
-    const view = new ChatView(model);
+    const view = new ChatView(chatModel);
     
     view.setUpdateCallbacks(
       (newHistory) => setHistory([...newHistory]),
@@ -35,7 +39,7 @@ export function useChatView({ model, session }: UseChatViewProps) {
     return () => {
       view.cleanup();
     };
-  }, [model]);
+  }, [chatModel]);
 
   // 채팅 입력 핸들러
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,7 +58,7 @@ export function useChatView({ model, session }: UseChatViewProps) {
 
   // 닉네임 처리
   const realNickname = nickname || (
-    session?.view?.viewId ? model.getViews().get(session.view.viewId) : ''
+    session?.view?.viewId ? chatModel.getViews().get(session.view.viewId) : ''
   ) || 'Loading...';
 
   const displayNickname = realNickname.length > CHAT_LIMITS.NICKNAME_DISPLAY_LENGTH 
@@ -69,6 +73,6 @@ export function useChatView({ model, session }: UseChatViewProps) {
     handleInputChange,
     handleSend,
     handleKeyPress,
-    model
+    model: chatModel
   };
 } 

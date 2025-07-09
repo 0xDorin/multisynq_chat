@@ -1,10 +1,7 @@
 'use client';
 
-import { ChatHeader } from './ChatHeader';
-import { ChatUserInfo } from './ChatUserInfo';
 import { ChatMessages } from './ChatMessages';
 import { ChatInput } from './ChatInput';
-import { ChatInstructions } from './ChatInstructions';
 import { useChatView } from '@/hooks/useChatView';
 import { ChatViewProps } from '@/types/chat';
 import { CHAT_STYLES } from '@/constants/chat';
@@ -24,13 +21,6 @@ export function ChatContainer({ model, session }: ChatViewProps) {
   return (
     <div className={CHAT_STYLES.container}>
       <div className={CHAT_STYLES.chatBox}>
-        <ChatHeader />
-        
-        <ChatUserInfo 
-          nickname={displayNickname}
-          viewCount={viewCount}
-        />
-        
         <ChatMessages 
           history={history}
           getMessageColor={(viewId) => chatModel.getViewColor(viewId)}
@@ -42,8 +32,6 @@ export function ChatContainer({ model, session }: ChatViewProps) {
           onKeyPress={handleKeyPress}
           onSend={handleSend}
         />
-        
-        <ChatInstructions />
       </div>
     </div>
   );

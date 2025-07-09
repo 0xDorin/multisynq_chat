@@ -515,6 +515,13 @@ detect-libc@^2.0.0, detect-libc@^2.0.3, detect-libc@^2.0.4:
   resolved "https://registry.yarnpkg.com/detect-libc/-/detect-libc-2.0.4.tgz#f04715b8ba815e53b4d8109655b6508a6865a7e8"
   integrity sha512-3UDv+G9CsCKO1WKMGw9fwq/SWJYbI0c5Y7LU1AXYoDdbhE2AHQ6N6Nb34sG8Fj7T5APy8qXDCKuuIHd1BR0tVA==
 
+emoji-picker-react@^4.12.3:
+  version "4.12.3"
+  resolved "https://registry.yarnpkg.com/emoji-picker-react/-/emoji-picker-react-4.12.3.tgz#d27bb28c0cc2a59a0fba4e0a828a393551794106"
+  integrity sha512-Pf+pTenW/uM+Juw197dbCtcB45uqvl9Y5/BzK44L72Aqvavt4UPmCqb+w0UKzUJkzh0Tp1rThfHVwoQXXbOZvQ==
+  dependencies:
+    flairup "1.0.0"
+
 end-of-stream@^1.1.0, end-of-stream@^1.4.1:
   version "1.4.5"
   resolved "https://registry.yarnpkg.com/end-of-stream/-/end-of-stream-1.4.5.tgz#7344d711dea40e0b74abc2ed49778743ccedb08c"
@@ -544,6 +551,11 @@ fastpriorityqueue@^0.7.5:
   version "0.7.5"
   resolved "https://registry.yarnpkg.com/fastpriorityqueue/-/fastpriorityqueue-0.7.5.tgz#4125d5ee34ff5f79a7199f993a55d1b7e291c5ad"
   integrity sha512-3Pa0n9gwy8yIbEsT3m2j/E9DXgWvvjfiZjjqcJ+AdNKTAlVMIuFYrYG5Y3RHEM8O6cwv9hOpOWY/NaMfywoQVA==
+
+flairup@1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/flairup/-/flairup-1.0.0.tgz#d3af0052ad02734c12d2446608a869498adb351b"
+  integrity sha512-IKlE+pNvL2R+kVL1kEhUYqRxVqeFnjiIvHWDMLFXNaqyUdFXQM2wte44EfMYJNHkW16X991t2Zg8apKkhv7OBA==
 
 fs-constants@^1.0.0:
   version "1.0.0"

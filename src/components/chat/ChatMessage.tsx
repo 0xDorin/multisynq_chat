@@ -6,24 +6,24 @@ interface ChatMessageProps {
 }
 
 export function ChatMessage({ message, color }: ChatMessageProps) {
-  // 메시지 파싱
+  // Parse message HTML
   const match = message.html.match(/^<b><span class=\"nickname\">(.*?)<\/span><\/b> (.*)$/);
   
   if (match) {
     const [, nickname, text] = match;
     return (
-      <div className="mb-1">
+      <div className="mb-2">
         <b><span style={{ color }}>{nickname}</span></b>{' '}
         <span className="text-gray-100">{text}</span>
       </div>
     );
   }
 
-  // fallback: 그냥 html로 렌더
+  // Fallback: render as HTML for system messages
   return (
     <div
       dangerouslySetInnerHTML={{ __html: message.html }}
-      className="mb-1 text-gray-100"
+      className="mb-2 text-gray-100"
     />
   );
 } 

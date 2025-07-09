@@ -1,73 +1,40 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Session, type MultisynqSession } from '@multisynq/client';
-import { ChatModel } from '@/lib/ChatModel';
-import { ChatViewComponent } from '@/components/ChatView';
-import { MULTISYNQ_CONFIG } from '@/config/multisynq';
+import { LiveChatToggle } from '@/components/LiveChatToggle';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
-  const [session, setSession] = useState<MultisynqSession<any> | null>(null);
-  const [model, setModel] = useState<ChatModel | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const connectToSession = async () => {
-      try {
-        const sessionResult = await Session.join({
-          apiKey: MULTISYNQ_CONFIG.apiKey,
-          appId: MULTISYNQ_CONFIG.appId,
-          name: MULTISYNQ_CONFIG.name,
-          password: MULTISYNQ_CONFIG.password,
-          model: ChatModel
-        });
-        setSession(sessionResult);
-        const rootModel = sessionResult.view.wellKnownModel("modelRoot") as ChatModel;
-        setModel(rootModel);
-        setIsConnected(true);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to connect to session');
-        console.error('Connection error:', err);
-      }
-    };
-
-    connectToSession();
-  }, []);
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg max-w-md w-full">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Connection Error</h1>
-          <p className="text-gray-700 mb-4">{error}</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="w-full px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Retry Connection
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isConnected || !model) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="bg-white p-8 rounded-lg shadow-lg">
-          <div className="flex items-center space-x-3">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <span className="text-lg text-gray-700">Connecting to Multisynq Chat...</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  const [input, setInput] = useState('');
+  const router = useRouter();
+  
   return (
-    <div className="min-h-screen bg-gray-100">
-      <ChatViewComponent model={model} session={session} />
-    </div>
+    <main className="min-h-screen p-8">
+      <h1 className="text-4xl font-bold mb-4">메인 페이지</h1>
+      <p className="text-lg text-gray-600 mb-8">
+        우측 하단의 채팅 버튼을 클릭하여 실시간 채팅을 시작하세요.
+      </p>
+
+      <input
+        type="text"
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
+        className="px-4 py-2 border border-gray-300 rounded-md mb-4"
+      />
+
+      <button onClick={() => {
+        router.push(`/token/${input}`);
+      }}
+      className="px-4 py-2 bg-[#a259ff] text-white rounded hover:bg-[#b084fa]"
+      >
+        Go to Token Page
+      </button>
+      
+      {/* 채팅 토글 버튼 */}
+      <LiveChatToggle 
+        roomId="lobby" 
+        position="bottom-right"
+      />
+    </main>
   );
 }

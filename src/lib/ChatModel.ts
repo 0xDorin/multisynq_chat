@@ -3,15 +3,16 @@ import { CHAT_COLORS, CHAT_LIMITS } from '@/constants/chat';
 
 export class ChatModel extends Model {
   private views!: Map<string, string>;
-  private viewColors!: Map<string, string>;  // 추가: 색상 저장용 Map
+  private viewColors!: Map<string, string>;
   private participants!: number;
   private history!: Array<{ viewId: string; html: string }>;
   private lastPostTime!: number | null;
   private inactivity_timeout_ms!: number;
+  private cleanupTimer: NodeJS.Timeout | null = null;
 
   init() {
     this.views = new Map();
-    this.viewColors = new Map();  // 추가: 색상 Map 초기화
+    this.viewColors = new Map();
     this.participants = 0;
     this.history = [];
     this.lastPostTime = null;
@@ -24,54 +25,108 @@ export class ChatModel extends Model {
     // Subscribe to chat events
     this.subscribe("input", "newPost", this.newPost);
     this.subscribe("input", "reset", this.resetHistory);
+
+    // Start periodic cleanup
+    this.startPeriodicCleanup();
   }
 
-  // 추가: 랜덤 색상 생성 함수
+  private startPeriodicCleanup() {
+    // Clean up old data every 5 minutes
+    this.cleanupTimer = setInterval(() => {
+      this.cleanupOldData();
+    }, 5 * 60 * 1000);
+  }
+
+  private cleanupOldData() {
+    const now = this.now();
+    const maxAge = 30 * 60 * 1000; // 30 minutes
+
+    // Remove old inactive views
+    for (const [viewId] of this.views) {
+      // If view hasn't been active for more than 30 minutes, remove it
+      if (now - (this.lastPostTime || 0) > maxAge) {
+        this.views.delete(viewId);
+        this.viewColors.delete(viewId);
+      }
+    }
+
+    // Limit history size more aggressively if needed
+    if (this.history.length > CHAT_LIMITS.MESSAGE_HISTORY_MAX * 0.8) {
+      const removeCount = Math.floor(this.history.length * 0.2);
+      this.history.splice(0, removeCount);
+    }
+  }
+
   private randomColor(): string {
     return CHAT_COLORS[Math.floor(Math.random() * CHAT_COLORS.length)];
   }
 
-  viewJoin(viewId: string) {
+  viewJoin = (viewId: string) => {
     const existing = this.views.get(viewId);
     if (!existing) {
       const nickname = this.randomName();
       this.views.set(viewId, nickname);
     }
-    // 매번 새로운 색상 할당
     this.viewColors.set(viewId, this.randomColor());
     this.participants++;
     this.publish("viewInfo", "refresh");
   }
 
-  viewExit(viewId: string) {
-    this.participants--;
+  viewExit = (viewId: string) => {
+    this.participants = Math.max(0, this.participants - 1);
     this.views.delete(viewId);
-    this.viewColors.delete(viewId);  // 추가: 색상 정보 삭제
+    this.viewColors.delete(viewId);
     this.publish("viewInfo", "refresh");
   }
 
-  newPost(post: { viewId: string; text: string }) {
+  newPost = (post: { viewId: string; text: string }) => {
+    // Input validation
+    if (!post.viewId || typeof post.text !== 'string') {
+      console.warn('Invalid post data:', post);
+      return;
+    }
+
+    // Text length limit and sanitization
+    const maxLength = 1000;
+    const sanitizedText = this.sanitizeText(post.text.slice(0, maxLength));
+    
     const postingView = post.viewId;
-    const nickname = this.views.get(postingView);
-    const chatLine = `<b><span class=\"nickname\">${this.escape(nickname || '')}</span></b> ${this.escape(post.text)}`;
+    const nickname = this.views.get(postingView) || 'Unknown';
+    const chatLine = `<b><span class="nickname">${this.escapeHtml(nickname)}</span></b> ${this.escapeHtml(sanitizedText)}`;
+    
     this.addToHistory({ viewId: postingView, html: chatLine });
     this.lastPostTime = this.now();
     this.future(this.inactivity_timeout_ms).resetIfInactive();
   }
 
+  private sanitizeText(text: string): string {
+    // Remove potentially harmful content
+    return text
+      .replace(/javascript:/gi, '')
+      .replace(/data:/gi, '')
+      .replace(/vbscript:/gi, '')
+      .trim();
+  }
+
   addToHistory(item: { viewId: string; html: string }) {
     this.history.push(item);
-    if (this.history.length > CHAT_LIMITS.MESSAGE_HISTORY_MAX) this.history.shift();
+    
+    // More aggressive history management
+    if (this.history.length > CHAT_LIMITS.MESSAGE_HISTORY_MAX) {
+      const removeCount = Math.floor(CHAT_LIMITS.MESSAGE_HISTORY_MAX * 0.1);
+      this.history.splice(0, removeCount);
+    }
+    
     this.publish("history", "refresh");
   }
 
-  resetIfInactive() {
+  resetIfInactive = () => {
     if (this.lastPostTime !== this.now() - this.inactivity_timeout_ms) return;
     this.resetHistory("due to inactivity");
   }
 
-  resetHistory(reason: string) {
-    this.history = [{ viewId: "system", html: `<i>chat reset ${reason}</i>` }];
+  resetHistory = (reason: string) => {
+    this.history.length = 0; // More efficient than assignment
     this.lastPostTime = null;
     this.publish("history", "refresh");
   }
@@ -85,16 +140,38 @@ export class ChatModel extends Model {
     return names[Math.floor(Math.random() * names.length)];
   }
 
-  private escape(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+  // XSS 방지를 위한 강화된 HTML 이스케이프
+  private escapeHtml(text: string): string {
+    const htmlEscapes: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+      '/': '&#x2F;',
+      '`': '&#x60;',
+      '=': '&#x3D;'
+    };
+    
+    return text.replace(/[&<>"'`=/]/g, (match) => htmlEscapes[match]);
   }
 
-  // Getter methods for view access
+  // Cleanup method
+  cleanup() {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+    
+    // Clear all data
+    this.views.clear();
+    this.viewColors.clear();
+    this.history.length = 0;
+    this.participants = 0;
+    this.lastPostTime = null;
+  }
+
+  // Getter methods
   getViews() {
     return this.views;
   }
@@ -107,9 +184,9 @@ export class ChatModel extends Model {
     return this.history;
   }
 
-  // 추가: 색상 getter 메소드
   getViewColor(viewId: string): string {
-    return this.viewColors.get(viewId) || "#a259ff";  // 기본 색상 fallback
+    if (viewId === "system") return "#a259ff";
+    return this.viewColors.get(viewId) || "#a259ff";
   }
 }
 
