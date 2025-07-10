@@ -59,6 +59,7 @@ class ChatErrorBoundary extends React.Component<
 export class ChatView extends View {
   private model: ChatModel;
   private onHistoryUpdate?: (history: { viewId: string; html: string }[]) => void;
+  private onNewMessage?: (message: { viewId: string; html: string }) => void;
   private onViewInfoUpdate?: (nickname: string, viewCount: number) => void;
   private isDestroyed = false;
 
@@ -67,15 +68,16 @@ export class ChatView extends View {
     this.model = model;
 
     try {
-      // 모델 이벤트 구독 (View에서만 가능)
-      this.subscribe("history", "refresh", this.handleHistoryRefresh);
+      // 이벤트 구독 설정
+      this.subscribe("history", "refresh", this.handleHistoryRefresh);  // 전체 히스토리 갱신
+      this.subscribe("history", "newMessage", this.handleNewMessage);   // 개별 메시지 추가
       this.subscribe("viewInfo", "refresh", this.handleViewInfoRefresh);
 
       // 초기 상태 동기화
       this.handleHistoryRefresh();
       this.handleViewInfoRefresh();
 
-      // 혼자 있고 기존 채팅에 내가 참여하지 않았다면 리셋
+      // 첫 입장 시 채팅방이 비어있으면 히스토리 초기화
       if (this.model.getParticipants() === 1 &&
           !this.model.getHistory().find(item => item.viewId === this.viewId)) {
         this.publish("input", "reset", "for new participants");
@@ -88,12 +90,15 @@ export class ChatView extends View {
   // React 상태 업데이트 콜백 등록
   setUpdateCallbacks(
     onHistoryUpdate: (history: { viewId: string; html: string }[]) => void,
+    onNewMessage: (message: { viewId: string; html: string }) => void,
     onViewInfoUpdate: (nickname: string, viewCount: number) => void
   ) {
     this.onHistoryUpdate = onHistoryUpdate;
+    this.onNewMessage = onNewMessage;
     this.onViewInfoUpdate = onViewInfoUpdate;
   }
 
+  // 전체 히스토리 갱신 처리 (초기 로드, 메시지 삭제 시)
   private handleHistoryRefresh = () => {
     if (this.isDestroyed) return;
     
@@ -105,6 +110,18 @@ export class ChatView extends View {
     }
   };
 
+  // 새 메시지 추가 처리 (일반적인 채팅 시)
+  private handleNewMessage = (message: { viewId: string; html: string }) => {
+    if (this.isDestroyed) return;
+    
+    try {
+      this.onNewMessage?.(message);
+    } catch (error) {
+      console.error('New message error:', error);
+    }
+  };
+
+  // 참여자 정보 갱신 처리
   private handleViewInfoRefresh = () => {
     if (this.isDestroyed) return;
     
@@ -118,7 +135,7 @@ export class ChatView extends View {
     }
   };
 
-  // 채팅 전송
+  // 채팅 메시지 전송
   sendMessage(text: string) {
     if (this.isDestroyed) return;
     
@@ -129,7 +146,7 @@ export class ChatView extends View {
     }
   }
 
-  // 정리
+  // 리소스 정리
   cleanup() {
     this.isDestroyed = true;
     try {

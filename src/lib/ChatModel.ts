@@ -18,39 +18,39 @@ export class ChatModel extends Model {
     this.lastPostTime = null;
     this.inactivity_timeout_ms = CHAT_LIMITS.INACTIVITY_TIMEOUT;
 
-    // Subscribe to system events
+    // 시스템 이벤트 구독 설정
     this.subscribe(this.sessionId, "view-join", this.viewJoin);
     this.subscribe(this.sessionId, "view-exit", this.viewExit);
     
-    // Subscribe to chat events
+    // 채팅 이벤트 구독 설정
     this.subscribe("input", "newPost", this.newPost);
     this.subscribe("input", "reset", this.resetHistory);
 
-    // Start periodic cleanup
+    // 주기적 정리 작업 시작
     this.startPeriodicCleanup();
   }
 
   private startPeriodicCleanup() {
-    // Clean up old data every 5 minutes
+    // 5분마다 오래된 데이터 정리
     this.cleanupTimer = setInterval(() => {
       this.cleanupOldData();
     }, 5 * 60 * 1000);
   }
 
   private cleanupOldData() {
-    const now = this.now();
-    const maxAge = 30 * 60 * 1000; // 30 minutes
+    const now = Date.now();
+    const maxAge = 30 * 60 * 1000; // 30분
 
-    // Remove old inactive views
+    // 비활성 사용자 정리
     for (const [viewId] of this.views) {
-      // If view hasn't been active for more than 30 minutes, remove it
+      // 채팅방 전체가 30분 이상 비활성 상태인 경우 모든 참여자 제거
       if (now - (this.lastPostTime || 0) > maxAge) {
         this.views.delete(viewId);
         this.viewColors.delete(viewId);
       }
     }
 
-    // Limit history size more aggressively if needed
+    // 채팅 히스토리 관리
     if (this.history.length > CHAT_LIMITS.MESSAGE_HISTORY_MAX * 0.8) {
       const removeCount = Math.floor(this.history.length * 0.2);
       this.history.splice(0, removeCount);
@@ -80,13 +80,13 @@ export class ChatModel extends Model {
   }
 
   newPost(post: { viewId: string; text: string }) {
-    // Input validation
+    // 입력값 검증
     if (!post.viewId || typeof post.text !== 'string') {
       console.warn('Invalid post data:', post);
       return;
     }
 
-    // Text length limit and sanitization
+    // 메시지 길이 제한 및 텍스트 정제
     const maxLength = 1000;
     const sanitizedText = this.sanitizeText(post.text.slice(0, maxLength));
     
@@ -95,12 +95,12 @@ export class ChatModel extends Model {
     const chatLine = `<b><span class="nickname">${this.escapeHtml(nickname)}</span></b> ${this.escapeHtml(sanitizedText)}`;
     
     this.addToHistory({ viewId: postingView, html: chatLine });
-    this.lastPostTime = this.now();
+    this.lastPostTime = Date.now();
     this.future(this.inactivity_timeout_ms).resetIfInactive();
   }
 
   private sanitizeText(text: string): string {
-    // Remove potentially harmful content
+    // 보안을 위한 유해 콘텐츠 제거
     return text
       .replace(/javascript:/gi, '')
       .replace(/data:/gi, '')
@@ -111,23 +111,27 @@ export class ChatModel extends Model {
   addToHistory(item: { viewId: string; html: string }) {
     this.history.push(item);
     
-    // More aggressive history management
+    // 메시지 히스토리 관리 및 이벤트 발행
     if (this.history.length > CHAT_LIMITS.MESSAGE_HISTORY_MAX) {
       const removeCount = Math.floor(CHAT_LIMITS.MESSAGE_HISTORY_MAX * 0.1);
       this.history.splice(0, removeCount);
+      // 메시지 삭제 시에만 전체 리프레시
+      this.publish("history", "refresh");
+    } else {
+      // 새 메시지 추가 시에는 개별 이벤트 발행
+      this.publish("history", "newMessage", item);
     }
-    
-    this.publish("history", "refresh");
   }
 
   resetIfInactive() {
-    if (this.lastPostTime !== this.now() - this.inactivity_timeout_ms) return;
+    if (this.lastPostTime !== Date.now() - this.inactivity_timeout_ms) return;
     this.resetHistory("due to inactivity");
   }
 
   resetHistory(reason: string) {
-    this.history.length = 0; // More efficient than assignment
+    this.history.length = 0;
     this.lastPostTime = null;
+    // 히스토리 리셋 시에는 전체 리프레시
     this.publish("history", "refresh");
   }
 
@@ -140,7 +144,7 @@ export class ChatModel extends Model {
     return names[Math.floor(Math.random() * names.length)];
   }
 
-  // XSS 방지를 위한 강화된 HTML 이스케이프
+  // XSS 방지를 위한 HTML 이스케이프 처리
   private escapeHtml(text: string): string {
     const htmlEscapes: Record<string, string> = {
       '&': '&amp;',
@@ -156,14 +160,13 @@ export class ChatModel extends Model {
     return text.replace(/[&<>"'`=/]/g, (match) => htmlEscapes[match]);
   }
 
-  // Cleanup method
   cleanup() {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
     }
     
-    // Clear all data
+    // 모든 데이터 초기화
     this.views.clear();
     this.viewColors.clear();
     this.history.length = 0;
@@ -171,7 +174,7 @@ export class ChatModel extends Model {
     this.lastPostTime = null;
   }
 
-  // Getter methods
+  // Getter 메서드들
   getViews() {
     return this.views;
   }

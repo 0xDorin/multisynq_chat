@@ -27,7 +27,10 @@ export function useChatView({ model, session }: UseChatViewProps) {
     const view = new ChatView(chatModel);
     
     view.setUpdateCallbacks(
+      // 전체 히스토리 갱신 (리셋 시에만)
       (newHistory) => setHistory([...newHistory]),
+      // 새 메시지 추가 (개별 메시지)
+      (newMessage) => setHistory(prev => [...prev, newMessage]),
       (newNickname, newViewCount) => {
         setNickname(newNickname);
         setViewCount(newViewCount);

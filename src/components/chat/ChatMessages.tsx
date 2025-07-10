@@ -19,7 +19,7 @@ export const ChatMessages = memo(function ChatMessages({ history, getMessageColo
     <div className="flex-1 overflow-y-auto p-4 text-sm text-gray-100" style={{ backgroundColor: '#181828' }}>
       {history.map((message, idx) => (
         <ChatMessage
-          key={`${message.viewId}-${idx}`}
+          key={`${message.viewId}-${message.html}-${idx}`}
           message={message}
           color={getMessageColor(message.viewId)}
         />
