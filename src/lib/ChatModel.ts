@@ -197,6 +197,7 @@ export class ChatModel extends Model {
   }
 
   canSendMessage(viewId: string): boolean {
+    console.log("canSendMessage", viewId, this.views.get(viewId));
     return this.views.get(viewId) !== "Guest";
   }
 }

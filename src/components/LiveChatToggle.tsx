@@ -29,7 +29,7 @@ export function LiveChatToggle({
   const { getSession, setSession: storeSetSession } = useChatSessionStore();
 
   const initializeChat = useCallback(async () => {
-    if (session || isConnecting) return;
+    if (isConnecting) return;
 
     setIsConnecting(true);
     setError(null);
