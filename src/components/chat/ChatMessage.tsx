@@ -1,4 +1,4 @@
-import { ChatMessage as ChatMessageType } from '@/types/chat';
+import { ChatMessage as ChatMessageType } from "@/types/chat";
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -7,23 +7,28 @@ interface ChatMessageProps {
 
 export function ChatMessage({ message, color }: ChatMessageProps) {
   // Parse message HTML
-  const match = message.html.match(/^<b><span class=\"nickname\">(.*?)<\/span><\/b> (.*)$/);
-  
+  const match = message.html.match(
+    /^<b><span class=\"nickname\">(.*?)<\/span><\/b> (.*)$/
+  );
+
   if (match) {
     const [, nickname, text] = match;
     return (
       <div className="mb-2">
-        <b><span style={{ color }}>{nickname}</span></b>{' '}
+        <b>
+          <span style={{ color }} className="mr-4">
+            {nickname}
+          </span>
+        </b>
         <span className="text-gray-100">{text}</span>
       </div>
     );
   }
 
-  // Fallback: render as HTML for system messages
+  // Fallback: render as safe text for system messages
   return (
-    <div
-      dangerouslySetInnerHTML={{ __html: message.html }}
-      className="mb-2 text-gray-100"
-    />
+    <div className="mb-2 text-gray-100">
+      <span className="text-gray-400 italic">{message.html}</span>
+    </div>
   );
-} 
+}
