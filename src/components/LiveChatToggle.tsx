@@ -26,93 +26,45 @@ export function LiveChatToggle({
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const { getSession, setSession: storeSetSession } = useChatSessionStore();
+  const { acquire, release } = useChatSessionStore();
+  const [retryKey, setRetryKey] = useState(0);
 
-  const initializeChat = useCallback(async () => {
-    if (isConnecting) return;
+  useEffect(() => {
+    let canceled = false;
 
-    setIsConnecting(true);
-    setError(null);
-
-    try {
-      // store에서 기존 세션 확인
-      const storedSession = getSession(roomId);
-
-      if (storedSession) {
-        // 저장된 세션이 있으면 그것을 사용
-        setSession(storedSession.session);
-        const rootModel = storedSession.session.view.wellKnownModel(
-          "modelRoot"
-        ) as ChatModel;
-        setModel(rootModel);
-        return;
-      }
-
-      // 저장된 세션이 없으면 새로 생성
-      const sessionResult = await Session.join({
-        apiKey: MULTISYNQ_CONFIG.apiKey,
-        appId: MULTISYNQ_CONFIG.appId,
-        name: `chat-${roomId}`,
-        password: MULTISYNQ_CONFIG.password,
-        model: ChatModel,
-      });
-
-      if (!mountedRef.current) return;
-
-      // 새로운 세션을 store에 저장
-      storeSetSession(roomId, sessionResult);
-
-      setSession(sessionResult);
-      const rootModel = sessionResult.view.wellKnownModel(
-        "modelRoot"
-      ) as ChatModel;
-      setModel(rootModel);
-
-      sessionResult.view.publish("viewInfo", "setNickname", {
-        viewId: sessionResult.view.viewId,
-        nickname: nickname,
-      });
-
-      console.log(
-        "init session nickname",
-        session,
-        sessionResult.view.viewId,
-        nickname
-      );
-    } catch (err) {
-      if (!mountedRef.current) return;
-
-      const errorMessage =
-        err instanceof Error ? err.message : "Failed to connect to session";
-      setError(errorMessage);
-      console.error("Connection error:", err);
-
-      // Retry connection after 3 seconds
-      retryTimeoutRef.current = setTimeout(() => {
-        if (mountedRef.current) {
-          initializeChat();
+    (async () => {
+      try {
+        const s = await acquire(roomId);
+        if (canceled) {
+          release(roomId);
+          return;
         }
-      }, 3000);
-    } finally {
-      if (mountedRef.current) {
-        setIsConnecting(false);
+
+        setSession(s);
+        setModel(s.view.wellKnownModel("modelRoot") as ChatModel);
+
+        // 닉네임 publish (옵셔널)
+        if (nickname) {
+          s.view?.publish?.("viewInfo", "setNickname", {
+            viewId: s.view.viewId,
+            nickname,
+          });
+        }
+      } catch (e) {
+        if (!canceled)
+          setError(e instanceof Error ? e.message : "unknown error");
       }
-    }
-  }, [roomId, session, isConnecting, getSession, storeSetSession]);
+    })();
 
-  useEffect(() => {
-    if (session && nickname) {
-      session.view.publish("viewInfo", "setNickname", {
-        viewId: session.view.viewId,
-        nickname: nickname,
-      });
-    }
-  }, [session, nickname]);
-
-  // Initialize chat on mount
-  useEffect(() => {
-    initializeChat();
-  }, [initializeChat]);
+    return () => {
+      canceled = true;
+      release(roomId); // 🔑 detach/leave 는 release 내부에서
+      /* setSession/setModel 는 굳이 호출 안 해도 되지만
+         로컬 상태를 초기화하려면 null 로 설정 */
+      setSession(null);
+      setModel(null);
+    };
+  }, [roomId, nickname, acquire, release, retryKey]);
 
   // Scroll to bottom when chat becomes visible
   useEffect(() => {
@@ -129,27 +81,14 @@ export function LiveChatToggle({
     }
   }, [isVisible]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
-
-      if (session) {
-        session.view.detach();
-      }
-    };
-  }, [session]);
-
   const handleToggle = useCallback(() => {
     setIsVisible((prev) => !prev);
   }, []);
 
-  const handleRetry = useCallback(() => {
+  const handleRetry = () => {
     setError(null);
-    setSession(null);
-    setModel(null);
-    initializeChat();
-  }, [initializeChat]);
+    setRetryKey((k) => k + 1); // useEffect 의존성에 retryKey 포함
+  };
 
   const positionClasses = {
     "bottom-right": "bottom-4 right-4",

@@ -24,10 +24,9 @@ export default function TokenPage() {
       {/* 채팅 토글 버튼 - 데스크탑에서만 표시 */}
       <div className="hidden md:block">
         <LiveChatToggle
-          key={address}
           roomId={address}
           position="bottom-right"
-          nickname={nickname}
+          nickname={nickname == "" ? undefined : nickname}
         />
       </div>
     </main>
