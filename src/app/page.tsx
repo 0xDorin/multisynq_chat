@@ -70,6 +70,7 @@ export default function Home() {
 
       {/* 채팅 토글 버튼 */}
       <LiveChatToggle
+        key="lobby"
         roomId="lobby"
         position="bottom-right"
         nickname={nickname == "" ? undefined : nickname}
