@@ -1,65 +1,73 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { View } from "@multisynq/client";
-import { ChatView } from "@/components/ChatView";
 import { ChatModel } from "@/lib/ChatModel";
 import { ChatMessage } from "@/types/chat";
 import { CHAT_LIMITS } from "@/constants/chat";
 
+/**
+ * Hook that binds a Multisynq **View** to React state without spawning a second view.
+ * @param view – the **existing** `session.view` you got from LiveChatToggle.
+ */
 interface UseChatViewProps {
-  model: View;
-  session?: any;
+  view: View;
 }
 
-export function useChatView({ model, session }: UseChatViewProps) {
+export function useChatView({ view }: UseChatViewProps) {
+  /* ---------------------------- derived instances --------------------------- */
+  const chatModel: ChatModel | null = useMemo(() => {
+    return view?.wellKnownModel
+      ? (view.wellKnownModel("modelRoot") as ChatModel)
+      : null;
+  }, [view]);
+
+  /* --------------------------------- state --------------------------------- */
   const [history, setHistory] = useState<ChatMessage[]>([]);
   const [nickname, setNickname] = useState<string>("");
   const [viewCount, setViewCount] = useState<number>(1);
-  const [input, setInput] = useState("");
-  const [chatView, setChatView] = useState<ChatView | null>(null);
+  const [input, setInput] = useState<string>("");
 
-  // ChatModel 가져오기 - 안전한 null 체크
-  const chatModel =
-    model?.wellKnownModel && typeof model.wellKnownModel === "function"
-      ? (model.wellKnownModel("modelRoot") as ChatModel)
-      : null;
-
-  // ChatView 인스턴스 생성 및 콜백 연결
+  /* --------------------------- Multisynq subscriptions ---------------------- */
   useEffect(() => {
-    if (!chatModel) return;
+    if (!chatModel || !view) return; // guard – model not ready yet
 
-    const view = new ChatView(chatModel);
-
-    view.setUpdateCallbacks(
-      // 전체 히스토리 갱신 (리셋 시에만)
-      (newHistory) => setHistory([...newHistory]),
-      // 새 메시지 추가 (개별 메시지)
-      (newMessage) => setHistory((prev) => [...prev, newMessage]),
-      (newNickname, newViewCount) => {
-        setNickname(newNickname);
-        setViewCount(newViewCount);
-      }
-    );
-
-    setChatView(view);
-
-    return () => {
-      view.cleanup();
+    /* subscription handlers */
+    const handleHistoryRefresh = () => setHistory([...chatModel.getHistory()]);
+    const handleNewMessage = (msg: ChatMessage) =>
+      setHistory((prev) => [...prev, msg]);
+    const handleViewInfoRefresh = () => {
+      setNickname(chatModel.getViews().get(view.viewId) || "");
+      setViewCount(chatModel.getParticipants());
     };
-  }, [chatModel]);
 
-  // 채팅 입력 핸들러
+    /* attach */
+    view.subscribe("history", "refresh", handleHistoryRefresh);
+    view.subscribe("history", "newMessage", handleNewMessage);
+    view.subscribe("viewInfo", "refresh", handleViewInfoRefresh);
+
+    /* initial sync */
+    handleHistoryRefresh();
+    handleViewInfoRefresh();
+
+    /* detach */
+    return () => {
+      view.unsubscribe("history", "refresh", handleHistoryRefresh);
+      view.unsubscribe("history", "newMessage", handleNewMessage);
+      view.unsubscribe("viewInfo", "refresh", handleViewInfoRefresh);
+      // NOTE: 실제 WebSocket detatch/leave 관리는 LiveChatToggle → release() 가 담당
+    };
+  }, [chatModel, view]);
+
+  /* ------------------------------ ui helpers ------------------------------- */
   const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setInput(e.target.value);
-    },
+    (e: React.ChangeEvent<HTMLInputElement>) => setInput(e.target.value),
     []
   );
 
   const handleSend = useCallback(() => {
-    if (!input.trim() || !chatView) return;
-    chatView.sendMessage(input);
+    if (!input.trim() || !view) return;
+    view.publish("input", "newPost", { viewId: view.viewId, text: input });
     setInput("");
-  }, [input, chatView]);
+  }, [input, view]);
 
   const handleKeyPress = useCallback(
     (e: React.KeyboardEvent) => {
@@ -68,19 +76,15 @@ export function useChatView({ model, session }: UseChatViewProps) {
     [handleSend]
   );
 
-  // 닉네임 처리 - null 체크 추가
-  const realNickname =
-    nickname ||
-    (session?.view?.viewId && chatModel
-      ? chatModel.getViews().get(session.view.viewId)
-      : "") ||
-    "Loading...";
+  /* derived nickname */
+  const displayNickname = useMemo(() => {
+    const real = nickname || "Loading…";
+    return real.length > CHAT_LIMITS.NICKNAME_DISPLAY_LENGTH
+      ? `${real.slice(0, CHAT_LIMITS.NICKNAME_DISPLAY_LENGTH)}…`
+      : real;
+  }, [nickname]);
 
-  const displayNickname =
-    realNickname.length > CHAT_LIMITS.NICKNAME_DISPLAY_LENGTH
-      ? realNickname.slice(0, CHAT_LIMITS.NICKNAME_DISPLAY_LENGTH) + "..."
-      : realNickname;
-
+  /* ------------------------------- return ---------------------------------- */
   return {
     history,
     displayNickname,

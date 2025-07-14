@@ -7,17 +7,15 @@ import { ChatViewProps } from "@/types/chat";
 import { CHAT_STYLES } from "@/constants/chat";
 import { useEffect } from "react";
 
-export function ChatContainer({ model, session, viewId }: ChatViewProps) {
+export function ChatContainer({ session, viewId }: ChatViewProps) {
   const {
     history,
-    displayNickname,
-    viewCount,
     input,
     handleInputChange,
     handleSend,
     handleKeyPress,
     model: chatModel,
-  } = useChatView({ model, session });
+  } = useChatView({ view: session.view });
 
   // chatModel이 null인 경우 처리
   if (!chatModel) {
@@ -30,11 +28,6 @@ export function ChatContainer({ model, session, viewId }: ChatViewProps) {
       </div>
     );
   }
-
-  useEffect(() => {
-    console.log("chatModel", chatModel, session);
-    console.log("viewId", viewId);
-  }, [viewId]);
 
   return (
     <div className={CHAT_STYLES.container}>
