@@ -5,6 +5,7 @@ import { ChatInput } from "./ChatInput";
 import { useChatView } from "@/hooks/useChatView";
 import { ChatViewProps } from "@/types/chat";
 import { CHAT_STYLES } from "@/constants/chat";
+import { useEffect } from "react";
 
 export function ChatContainer({ model, session, viewId }: ChatViewProps) {
   const {
@@ -29,6 +30,11 @@ export function ChatContainer({ model, session, viewId }: ChatViewProps) {
       </div>
     );
   }
+
+  useEffect(() => {
+    console.log("chatModel", chatModel, session);
+    console.log("viewId", viewId);
+  }, [viewId]);
 
   return (
     <div className={CHAT_STYLES.container}>
