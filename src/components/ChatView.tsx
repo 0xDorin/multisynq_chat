@@ -8,6 +8,7 @@ import { ChatContainer } from "./chat/ChatContainer";
 interface ChatViewProps {
   model: View;
   session: MultisynqSession<any>;
+  viewId?: string;
 }
 
 // Error boundary component
@@ -205,7 +206,11 @@ export function ChatViewComponent({ model, session }: ChatViewProps) {
 
   return (
     <ChatErrorBoundary>
-      <ChatContainer model={model} session={session} />
+      <ChatContainer
+        model={model}
+        session={session}
+        viewId={session.view.viewId}
+      />
     </ChatErrorBoundary>
   );
 }

@@ -9,7 +9,6 @@ export class ChatModel extends Model {
   private lastPostTime!: number | null;
   private inactivity_timeout_ms!: number;
   private cleanupTimer: NodeJS.Timeout | null = null;
-  private userNickname: string | null = null;
 
   init() {
     this.views = new Map();
@@ -33,9 +32,10 @@ export class ChatModel extends Model {
   }
 
   handleNickname({ viewId, nickname }: { viewId: string; nickname?: string }) {
-    this.views.set(viewId, nickname?.trim() || "Guest");
-    this.userNickname = nickname || null;
-    this.viewColors.set(viewId, this.randomColor());
+    const trimmed = nickname?.trim() || "Guest";
+    this.views.set(viewId, trimmed);
+    if (!this.viewColors.has(viewId))
+      this.viewColors.set(viewId, this.randomColor());
     this.publish("viewInfo", "refresh");
   }
 
@@ -101,9 +101,9 @@ export class ChatModel extends Model {
     const sanitizedText = this.sanitizeText(post.text.slice(0, maxLength));
 
     const postingView = post.viewId;
-    const nickname = this.userNickname; // 이미 null check 완료
+    const nickname = this.views.get(post.viewId) || "Guest";
     const chatLine = `<b><span class="nickname">${this.escapeHtml(
-      nickname || "Guest"
+      nickname
     )}</span></b> ${this.escapeHtml(sanitizedText)}`;
 
     this.addToHistory({ viewId: postingView, html: chatLine });
@@ -165,6 +165,7 @@ export class ChatModel extends Model {
 
   cleanup() {
     if (this.cleanupTimer) {
+      if (this.participants > 0) return;
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
     }
@@ -195,8 +196,8 @@ export class ChatModel extends Model {
     return this.viewColors.get(viewId) || "#a259ff";
   }
 
-  canSendMessage(): boolean {
-    return this.userNickname !== null;
+  canSendMessage(viewId: string): boolean {
+    return this.views.get(viewId) !== "Guest";
   }
 }
 

@@ -73,7 +73,12 @@ export function LiveChatToggle({
         nickname: nickname,
       });
 
-      console.log("init session nickname", session, nickname);
+      console.log(
+        "init session nickname",
+        session,
+        sessionResult.view.viewId,
+        nickname
+      );
     } catch (err) {
       if (!mountedRef.current) return;
 
@@ -97,7 +102,6 @@ export function LiveChatToggle({
 
   useEffect(() => {
     if (session && nickname) {
-      console.log("session nickname useEffect", session, nickname);
       session.view.publish("viewInfo", "setNickname", {
         viewId: session.view.viewId,
         nickname: nickname,

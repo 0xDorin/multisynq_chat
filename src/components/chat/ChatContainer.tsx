@@ -6,7 +6,7 @@ import { useChatView } from "@/hooks/useChatView";
 import { ChatViewProps } from "@/types/chat";
 import { CHAT_STYLES } from "@/constants/chat";
 
-export function ChatContainer({ model, session }: ChatViewProps) {
+export function ChatContainer({ model, session, viewId }: ChatViewProps) {
   const {
     history,
     displayNickname,
@@ -43,7 +43,7 @@ export function ChatContainer({ model, session }: ChatViewProps) {
           onChange={handleInputChange}
           onKeyPress={handleKeyPress}
           onSend={handleSend}
-          disabled={!chatModel.canSendMessage()}
+          disabled={!viewId || !chatModel.canSendMessage(viewId)}
         />
       </div>
     </div>
