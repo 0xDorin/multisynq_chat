@@ -132,21 +132,13 @@ export function LiveChatToggle({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      mountedRef.current = false;
-
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
-
-      if (model) {
-        model.cleanup();
-      }
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
 
       if (session) {
         session.view.detach();
       }
     };
-  }, [model, session]);
+  }, [session]);
 
   const handleToggle = useCallback(() => {
     setIsVisible((prev) => !prev);
