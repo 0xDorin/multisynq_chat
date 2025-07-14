@@ -1,5 +1,5 @@
-import { Model } from '@multisynq/client';
-import { CHAT_COLORS, CHAT_LIMITS } from '@/constants/chat';
+import { Model } from "@multisynq/client";
+import { CHAT_COLORS, CHAT_LIMITS } from "@/constants/chat";
 
 export class ChatModel extends Model {
   private views!: Map<string, string>;
@@ -9,6 +9,7 @@ export class ChatModel extends Model {
   private lastPostTime!: number | null;
   private inactivity_timeout_ms!: number;
   private cleanupTimer: NodeJS.Timeout | null = null;
+  private userNickname: string | null = null;
 
   init() {
     this.views = new Map();
@@ -21,13 +22,21 @@ export class ChatModel extends Model {
     // 시스템 이벤트 구독 설정
     this.subscribe(this.sessionId, "view-join", this.viewJoin);
     this.subscribe(this.sessionId, "view-exit", this.viewExit);
-    
+    this.subscribe("viewInfo", "setNickname", this.handleNickname);
+
     // 채팅 이벤트 구독 설정
     this.subscribe("input", "newPost", this.newPost);
     this.subscribe("input", "reset", this.resetHistory);
 
     // 주기적 정리 작업 시작
     this.startPeriodicCleanup();
+  }
+
+  handleNickname({ viewId, nickname }: { viewId: string; nickname?: string }) {
+    this.views.set(viewId, nickname?.trim() || "Guest");
+    this.userNickname = nickname || null;
+    this.viewColors.set(viewId, this.randomColor());
+    this.publish("viewInfo", "refresh");
   }
 
   private startPeriodicCleanup() {
@@ -62,13 +71,14 @@ export class ChatModel extends Model {
   }
 
   viewJoin(viewId: string) {
-    const existing = this.views.get(viewId);
-    if (!existing) {
-      const nickname = this.randomName();
-      this.views.set(viewId, nickname);
+    const isNew = !this.views.has(viewId);
+
+    this.views.set(viewId, "Guest");
+    if (isNew) this.participants++;
+
+    if (!this.viewColors.has(viewId)) {
+      this.viewColors.set(viewId, this.randomColor());
     }
-    this.viewColors.set(viewId, this.randomColor());
-    this.participants++;
     this.publish("viewInfo", "refresh");
   }
 
@@ -81,19 +91,21 @@ export class ChatModel extends Model {
 
   newPost(post: { viewId: string; text: string }) {
     // 입력값 검증
-    if (!post.viewId || typeof post.text !== 'string') {
-      console.warn('Invalid post data:', post);
+    if (!post.viewId || typeof post.text !== "string") {
+      console.warn("Invalid post data:", post);
       return;
     }
 
     // 메시지 길이 제한 및 텍스트 정제
     const maxLength = 1000;
     const sanitizedText = this.sanitizeText(post.text.slice(0, maxLength));
-    
+
     const postingView = post.viewId;
-    const nickname = this.views.get(postingView) || 'Unknown';
-    const chatLine = `<b><span class="nickname">${this.escapeHtml(nickname)}</span></b> ${this.escapeHtml(sanitizedText)}`;
-    
+    const nickname = this.userNickname; // 이미 null check 완료
+    const chatLine = `<b><span class="nickname">${this.escapeHtml(
+      nickname || "Guest"
+    )}</span></b> ${this.escapeHtml(sanitizedText)}`;
+
     this.addToHistory({ viewId: postingView, html: chatLine });
     this.lastPostTime = Date.now();
     this.future(this.inactivity_timeout_ms).resetIfInactive();
@@ -102,15 +114,15 @@ export class ChatModel extends Model {
   private sanitizeText(text: string): string {
     // 보안을 위한 유해 콘텐츠 제거
     return text
-      .replace(/javascript:/gi, '')
-      .replace(/data:/gi, '')
-      .replace(/vbscript:/gi, '')
+      .replace(/javascript:/gi, "")
+      .replace(/data:/gi, "")
+      .replace(/vbscript:/gi, "")
       .trim();
   }
 
   addToHistory(item: { viewId: string; html: string }) {
     this.history.push(item);
-    
+
     // 메시지 히스토리 관리 및 이벤트 발행
     if (this.history.length > CHAT_LIMITS.MESSAGE_HISTORY_MAX) {
       const removeCount = Math.floor(CHAT_LIMITS.MESSAGE_HISTORY_MAX * 0.1);
@@ -135,28 +147,19 @@ export class ChatModel extends Model {
     this.publish("history", "refresh");
   }
 
-  randomName(): string {
-    const names = [
-      "Acorn", "Birch", "Cedar", "Daisy", "Elm", "Fern", "Grove", "Hazel",
-      "Iris", "Juniper", "Kale", "Lily", "Maple", "Nettle", "Oak", "Pine",
-      "Quince", "Rose", "Sage", "Thyme", "Umber", "Violet", "Willow", "Yarrow", "Zucchini"
-    ];
-    return names[Math.floor(Math.random() * names.length)];
-  }
-
   // XSS 방지를 위한 HTML 이스케이프 처리
   private escapeHtml(text: string): string {
     const htmlEscapes: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#39;',
-      '/': '&#x2F;',
-      '`': '&#x60;',
-      '=': '&#x3D;'
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;",
+      "/": "&#x2F;",
+      "`": "&#x60;",
+      "=": "&#x3D;",
     };
-    
+
     return text.replace(/[&<>"'`=/]/g, (match) => htmlEscapes[match]);
   }
 
@@ -165,7 +168,7 @@ export class ChatModel extends Model {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
     }
-    
+
     // 모든 데이터 초기화
     this.views.clear();
     this.viewColors.clear();
@@ -191,6 +194,10 @@ export class ChatModel extends Model {
     if (viewId === "system") return "#a259ff";
     return this.viewColors.get(viewId) || "#a259ff";
   }
+
+  canSendMessage(): boolean {
+    return this.userNickname !== null;
+  }
 }
 
-ChatModel.register("ChatModel"); 
+ChatModel.register("ChatModel");
