@@ -35,7 +35,6 @@ export const ChatInput = memo(function ChatInput({
         target: { value: newValue },
       } as React.ChangeEvent<HTMLInputElement>);
 
-      // Adjust cursor position after emoji insertion
       const newCursorPos = start + emoji.length;
       setTimeout(() => {
         textarea.focus();
@@ -62,7 +61,6 @@ export const ChatInput = memo(function ChatInput({
     setIsEmojiPickerOpen(false);
   }, []);
 
-  // Close emoji picker on outside click - optimized with useCallback
   useEffect(() => {
     if (!isEmojiPickerOpen) return;
 
@@ -88,13 +86,14 @@ export const ChatInput = memo(function ChatInput({
           type="text"
           placeholder={disabled ? "Login to chat..." : placeholder}
           className={`flex-1 px-4 py-3 pr-12 bg-[#23233a] rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#a259ff] w-full ${
-            disabled ? "opacity-50 cursor-not-allowed" : ""
+            disabled ? "opacity-50 cursor-pointer" : ""
           }`}
           value={value}
           onChange={onChange}
           onKeyPress={handleKeyPress}
+          // onClick={disabled ? handleConnect : undefined}
           autoComplete="off"
-          disabled={disabled}
+          readOnly={disabled}
         />
 
         {/* Emoji button */}

@@ -1,15 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
-import { View, type MultisynqSession } from "@multisynq/client";
+import React, { useState, useEffect } from "react";
 import { ChatModel } from "@/lib/ChatModel";
-import { ChatContainer } from "./chat/ChatContainer";
-
-interface ChatViewProps {
-  model: View;
-  session: MultisynqSession<any>;
-  viewId?: string;
-}
+import { ChatContainer } from "@/components/chat/ChatContainer";
+import { ChatViewProps } from "@/types/chat";
+import { View } from "@multisynq/client";
 
 // Error boundary component
 class ChatErrorBoundary extends React.Component<

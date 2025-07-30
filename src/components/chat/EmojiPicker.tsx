@@ -1,4 +1,4 @@
-import EmojiPickerReact, { EmojiClickData, Theme } from 'emoji-picker-react';
+import EmojiPickerReact, { EmojiClickData, Theme } from "emoji-picker-react";
 
 interface EmojiPickerProps {
   onEmojiSelect: (emoji: string) => void;
@@ -6,7 +6,11 @@ interface EmojiPickerProps {
   onClose: () => void;
 }
 
-export function EmojiPicker({ onEmojiSelect, isOpen, onClose }: EmojiPickerProps) {
+export function EmojiPicker({
+  onEmojiSelect,
+  isOpen,
+  onClose,
+}: EmojiPickerProps) {
   if (!isOpen) return null;
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
@@ -26,4 +30,4 @@ export function EmojiPicker({ onEmojiSelect, isOpen, onClose }: EmojiPickerProps
       </div>
     </div>
   );
-} 
+}

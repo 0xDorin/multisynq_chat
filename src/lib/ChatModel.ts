@@ -102,9 +102,7 @@ export class ChatModel extends Model {
 
     const postingView = post.viewId;
     const nickname = this.views.get(post.viewId) || "Guest";
-    const chatLine = `<b><span class="nickname">${this.escapeHtml(
-      nickname
-    )}</span></b> ${this.escapeHtml(sanitizedText)}`;
+    const chatLine = `<b><span class="nickname">${nickname}</span></b> ${sanitizedText}`;
 
     this.addToHistory({ viewId: postingView, html: chatLine });
     this.lastPostTime = Date.now();
@@ -147,22 +145,6 @@ export class ChatModel extends Model {
     this.publish("history", "refresh");
   }
 
-  // XSS 방지를 위한 HTML 이스케이프 처리
-  private escapeHtml(text: string): string {
-    const htmlEscapes: Record<string, string> = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#39;",
-      "/": "&#x2F;",
-      "`": "&#x60;",
-      "=": "&#x3D;",
-    };
-
-    return text.replace(/[&<>"'`=/]/g, (match) => htmlEscapes[match]);
-  }
-
   cleanup() {
     if (this.cleanupTimer) {
       if (this.participants > 0) return;
@@ -197,7 +179,6 @@ export class ChatModel extends Model {
   }
 
   canSendMessage(viewId: string): boolean {
-    console.log("canSendMessage", viewId, this.views.get(viewId));
     return this.views.get(viewId) !== "Guest";
   }
 }

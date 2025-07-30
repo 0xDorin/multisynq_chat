@@ -1,4 +1,5 @@
-import { View } from "@multisynq/client";
+import { ChatModel } from "@/lib/ChatModel";
+import { MultisynqSession } from "@multisynq/client";
 
 export interface ChatMessage {
   viewId: string;
@@ -6,7 +7,7 @@ export interface ChatMessage {
 }
 
 export interface ChatViewProps {
-  model: View;
-  session?: any; // MultisynqSession 타입
+  model: ChatModel;
+  session: MultisynqSession<any>;
   viewId?: string;
 }
