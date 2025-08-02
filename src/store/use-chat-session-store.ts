@@ -1,46 +1,17 @@
-// use-chat-session-store.ts
+// use-chat-session-store.ts  – stale-session 방지 버전
 import { create } from "zustand";
 import { Session, MultisynqSession } from "@multisynq/client";
 import { ChatModel } from "@/lib/ChatModel";
 import { MULTISYNQ_CONFIG } from "@/config/multisynq";
 
-type Entry = {
-  session: MultisynqSession<any>;
-  refs: number;
-};
-
+/* ─────────────────── Types ───────────────────*/
+type Entry = { session: MultisynqSession<any>; refs: number };
 type ConnectionStatus =
   | "idle"
   | "connecting"
   | "reconnecting"
   | "connected"
   | "failed";
-
-const joinWithTimeout = (
-  roomId: string,
-  timeoutMs: number
-): Promise<MultisynqSession<any>> =>
-  new Promise((resolve, reject) => {
-    let timer: NodeJS.Timeout | null = setTimeout(() => {
-      timer = null; // timeout 발생 표시
-      reject(new Error("Connection timeout"));
-    }, timeoutMs);
-
-    attemptSessionJoin(roomId)
-      .then((s) => {
-        if (timer === null) {
-          // 이미 timeout 됐으므로 사용하지 않고 즉시 정리
-          s.leave();
-          return;
-        }
-        clearTimeout(timer);
-        resolve(s);
-      })
-      .catch((err) => {
-        if (timer !== null) clearTimeout(timer);
-        reject(err);
-      });
-  });
 
 interface ChatSessionStore {
   cache: Record<string, Entry>;
@@ -50,121 +21,160 @@ interface ChatSessionStore {
   getConnectionStatus: (roomId: string) => ConnectionStatus;
 }
 
-// 세션 연결 시도 함수
-const attemptSessionJoin = async (
-  roomId: string
-): Promise<MultisynqSession<any>> => {
-  return await Session.join({
+/* ───────────── Helpers & attempt tracking ─────────────*/
+const pendingJoins = new Map<string, Promise<MultisynqSession<any>>>();
+// roomId ➜ latest attempt id
+const activeAttemptId = new Map<string, number>();
+
+const attemptSessionJoin = (roomId: string) =>
+  Session.join({
     apiKey: MULTISYNQ_CONFIG.apiKey,
     appId: MULTISYNQ_CONFIG.appId,
     name: `chat-${roomId}`,
     password: MULTISYNQ_CONFIG.password,
     model: ChatModel,
   });
+
+const joinWithTimeout = async (roomId: string, timeoutMs: number) => {
+  const joinPromise = attemptSessionJoin(roomId);
+
+  let timer: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Connection timeout")),
+      timeoutMs
+    );
+  });
+
+  return Promise.race([joinPromise, timeoutPromise])
+    .finally(() => clearTimeout(timer))
+    .catch((err) => {
+      // race 에서 joinPromise 가 졌을 때는 아직 끝나지 않았으므로,
+      // 나중에 성공해도 유령 세션이 되지 않도록 정리.
+      joinPromise
+        .then((s) => {
+          try {
+            s.leave();
+          } catch (e) {
+            console.warn("[ChatSessionStore] stale join cleanup failed:", e);
+          }
+        })
+        .catch(() => {
+          /* 무시 – 이미 실패한 join */
+        });
+      throw err;
+    });
 };
 
-// 재시도 로직이 포함된 세션 연결 함수
 const connectWithRetry = async (
   roomId: string,
-  updateStatus: (status: ConnectionStatus) => void,
-  maxAttempts = 3
-): Promise<MultisynqSession<any>> => {
-  const INITIAL_TIMEOUT = 3000; // 3초로 단축
-  const MAX_TIMEOUT = 8000; // 8초로 단축
+  updateStatus: (s: ConnectionStatus) => void,
+  maxAttempts = 3,
+  initialTimeout = 3_000,
+  maxTimeout = 8_000
+) => {
+  // 현재 connect 호출 고유 ID
+  const attemptId = (activeAttemptId.get(roomId) ?? 0) + 1;
+  activeAttemptId.set(roomId, attemptId);
+  const isStale = () => activeAttemptId.get(roomId) !== attemptId;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    updateStatus(attempt === 1 ? "connecting" : "reconnecting");
     try {
-      // 상태 업데이트
-      if (attempt === 1) {
-        updateStatus("connecting");
-      } else {
-        updateStatus("reconnecting");
-      }
+      const s = await joinWithTimeout(
+        roomId,
+        Math.min(initialTimeout * attempt, maxTimeout)
+      );
 
-      // 타임아웃 시간을 점진적으로 증가 (3초 → 6초 → 8초)
-      const timeout = Math.min(INITIAL_TIMEOUT * attempt, MAX_TIMEOUT);
-      const session = await joinWithTimeout(roomId, timeout);
+      // 뒤늦게 성공한(=stale) 세션은 즉시 종료
+      if (isStale()) {
+        s.leave();
+        throw new Error("Stale attempt discarded");
+      }
 
       updateStatus("connected");
-      return session;
-    } catch (error) {
-      console.warn(`Chat connection attempt ${attempt} failed:`, error);
-
-      // 마지막 시도에서 실패하면 에러를 던짐
+      return s;
+    } catch (err) {
+      if (isStale()) throw err; // 최신 시도가 이미 진행 중
       if (attempt === maxAttempts) {
         updateStatus("failed");
-        throw new Error(
-          `Failed to connect to chat after ${maxAttempts} attempts`
-        );
+        throw err;
       }
-
-      // 재시도 전에 지수 백오프로 대기 (1초 → 2초)
-      const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 2000);
-      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      await new Promise((r) =>
+        setTimeout(r, Math.min(1_000 * 2 ** (attempt - 1), 2_000))
+      );
     }
   }
-
-  updateStatus("failed");
-  throw new Error("Unexpected error in connection retry logic");
+  throw new Error("Unreachable");
 };
 
+/* ─────────────────── Store ───────────────────*/
 export const useChatSessionStore = create<ChatSessionStore>((set, get) => ({
   cache: {},
   connectionStatus: {},
 
-  getConnectionStatus: (roomId: string) => {
-    const { connectionStatus } = get();
-    return connectionStatus[roomId] || "idle";
-  },
+  getConnectionStatus: (roomId) => get().connectionStatus[roomId] ?? "idle",
 
+  /* -------- acquire --------*/
   acquire: async (roomId) => {
-    const { cache, connectionStatus } = get();
-
-    if (cache[roomId]) {
-      cache[roomId].refs += 1;
-      return cache[roomId].session;
-    }
-
-    const updateStatus = (status: ConnectionStatus) => {
-      set((state) => ({
-        connectionStatus: {
-          ...state.connectionStatus,
-          [roomId]: status,
+    const state = get();
+    const cached = state.cache[roomId];
+    if (cached) {
+      set({
+        cache: {
+          ...state.cache,
+          [roomId]: { ...cached, refs: cached.refs + 1 },
         },
-      }));
-    };
-
-    try {
-      const s = await connectWithRetry(roomId, updateStatus);
-      cache[roomId] = { session: s, refs: 1 };
-      set({ cache });
-      return s;
-    } catch (error) {
-      console.error("Failed to establish chat connection:", error);
-      updateStatus("failed");
-      throw error; // 상위에서 처리할 수 있도록 에러를 전파
+      });
+      return cached.session;
     }
+
+    const existing = pendingJoins.get(roomId);
+    if (existing) return existing;
+
+    const updateStatus = (status: ConnectionStatus) =>
+      set((prev) => ({
+        connectionStatus: { ...prev.connectionStatus, [roomId]: status },
+      }));
+
+    const joinPromise = connectWithRetry(roomId, updateStatus)
+      .then((session) => {
+        set((prev) => ({
+          cache: { ...prev.cache, [roomId]: { session, refs: 1 } },
+        }));
+        pendingJoins.delete(roomId);
+        return session;
+      })
+      .catch((err) => {
+        pendingJoins.delete(roomId);
+        throw err;
+      });
+
+    pendingJoins.set(roomId, joinPromise);
+    return joinPromise;
   },
 
+  /* -------- release --------*/
   release: (roomId) => {
-    const { cache } = get();
-    const entry = cache[roomId];
+    const state = get();
+    const entry = state.cache[roomId];
     if (!entry) return;
-    entry.refs = Math.max(0, entry.refs - 1);
 
-    if (entry.refs <= 0) {
-      entry.session.leave(); // 🔥 완전 종료
-      delete cache[roomId];
-
-      // 연결 상태도 정리
-      set((state) => {
-        const newConnectionStatus = { ...state.connectionStatus };
-        delete newConnectionStatus[roomId];
-        return { connectionStatus: newConnectionStatus };
-      });
+    const refs = Math.max(0, entry.refs - 1);
+    if (refs === 0) {
+      try {
+        entry.session.leave();
+      } catch (e) {
+        console.error("[ChatSessionStore] leave() error:", e);
+      }
+      const { [roomId]: _c, ...restCache } = state.cache;
+      const { [roomId]: _s, ...restStatus } = state.connectionStatus;
+      set({ cache: restCache, connectionStatus: restStatus });
     } else {
-      entry.session.view.detach(); // 🔕 뷰만 끊기
+      entry.session.view.detach();
+      set({
+        cache: { ...state.cache, [roomId]: { ...entry, refs } },
+      });
     }
-    set({ cache });
   },
 }));

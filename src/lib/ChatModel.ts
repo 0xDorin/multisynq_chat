@@ -46,13 +46,13 @@ export class ChatModel extends Model {
     }, 5 * 60 * 1000);
   }
 
-  private cleanupOldData() {
-    const now = Date.now();
-    const maxAge = 30 * 60 * 1000; // 30분
+  private cleanupOldData(): void {
+    const now: number    = this.now();                   // Croquet 가상시간은 number
+    const maxAge: number = 30 * 60 * 1000;             // 30분 (밀리초)
 
     // 비활성 사용자 정리
-    for (const [viewId] of this.views) {
-      // 채팅방 전체가 30분 이상 비활성 상태인 경우 모든 참여자 제거
+    for (const viewId of this.views.keys()) {
+      // now( number ) - lastPostTime( number ) 이므로 TS 에러 없음
       if (now - (this.lastPostTime || 0) > maxAge) {
         this.views.delete(viewId);
         this.viewColors.delete(viewId);
@@ -60,10 +60,14 @@ export class ChatModel extends Model {
     }
 
     // 채팅 히스토리 관리
-    if (this.history.length > CHAT_LIMITS.MESSAGE_HISTORY_MAX * 0.8) {
-      const removeCount = Math.floor(this.history.length * 0.2);
+    const historyMax = CHAT_LIMITS.MESSAGE_HISTORY_MAX; 
+    if (this.history.length > historyMax * 0.8) {
+      const removeCount: number = Math.floor(this.history.length * 0.2);
       this.history.splice(0, removeCount);
     }
+
+    // 다음 실행 예약 (예: 5분 후)
+    this.future(5 * 60 * 1000, "cleanupOldData");
   }
 
   private randomColor(): string {
@@ -105,8 +109,7 @@ export class ChatModel extends Model {
     const chatLine = `<b><span class="nickname">${nickname}</span></b> ${sanitizedText}`;
 
     this.addToHistory({ viewId: postingView, html: chatLine });
-    this.lastPostTime = Date.now();
-    this.future(this.inactivity_timeout_ms).resetIfInactive();
+    this.lastPostTime = this.now();
   }
 
   private sanitizeText(text: string): string {
@@ -131,11 +134,6 @@ export class ChatModel extends Model {
       // 새 메시지 추가 시에는 개별 이벤트 발행
       this.publish("history", "newMessage", item);
     }
-  }
-
-  resetIfInactive() {
-    if (this.lastPostTime !== Date.now() - this.inactivity_timeout_ms) return;
-    this.resetHistory("due to inactivity");
   }
 
   resetHistory(reason: string) {
