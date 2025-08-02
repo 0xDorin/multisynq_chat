@@ -70,7 +70,7 @@ const connectWithRetry = async (
   roomId: string,
   updateStatus: (s: ConnectionStatus) => void,
   maxAttempts = 3,
-  initialTimeout = 3_000,
+  initialTimeout = 4_000,
   maxTimeout = 8_000
 ) => {
   // 현재 connect 호출 고유 ID
