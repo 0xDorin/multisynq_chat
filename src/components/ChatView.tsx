@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { ChatModel } from "@/lib/ChatModel";
 import { ChatContainer } from "@/components/chat/ChatContainer";
 import { ChatViewProps } from "@/types/chat";

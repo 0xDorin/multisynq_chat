@@ -5,7 +5,6 @@ import { ChatInput } from "./ChatInput";
 import { useChatView } from "@/hooks/useChatView";
 import { ChatViewProps } from "@/types/chat";
 import { CHAT_STYLES } from "@/constants/chat";
-import { useEffect } from "react";
 
 export function ChatContainer({ session, viewId }: ChatViewProps) {
   const {
