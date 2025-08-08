@@ -13,13 +13,26 @@ export type ConnectionStatus =
   | "failed";
 
 export async function attemptJoin(roomId: string) {
-  return Session.join({
-    apiKey: MULTISYNQ_CONFIG.apiKey,
-    appId: MULTISYNQ_CONFIG.appId,
-    name: `chat-${roomId}`,
-    password: MULTISYNQ_CONFIG.password,
-    model: ChatModel,
-  });
+  const startTime = performance.now();
+  console.log(`[Chat] Starting connection to room: ${roomId}`);
+  
+  try {
+    const session = await Session.join({
+      apiKey: MULTISYNQ_CONFIG.apiKey,
+      appId: MULTISYNQ_CONFIG.appId,
+      name: `chat-${roomId}`,
+      password: MULTISYNQ_CONFIG.password,
+      model: ChatModel,
+    });
+    
+    const elapsed = performance.now() - startTime;
+    console.log(`[Chat] ✅ Connected successfully in ${elapsed.toFixed(0)}ms`);
+    return session;
+  } catch (error) {
+    const elapsed = performance.now() - startTime;
+    console.log(`[Chat] ❌ Connection failed after ${elapsed.toFixed(0)}ms`, error);
+    throw error;
+  }
 }
 
 /**
@@ -30,18 +43,27 @@ export async function joinWithTimeout(
   roomId: string,
   timeoutMs = 4_000
 ): Promise<MultisynqSession<any>> {
+  console.log(`[Chat] joinWithTimeout called with timeout: ${timeoutMs}ms`);
+  const startTime = performance.now();
   const joinPromise = attemptJoin(roomId);
 
   let timer: ReturnType<typeof setTimeout>;
   const timeoutPromise = new Promise<never>((_, reject) => {
     timer = setTimeout(
-      () => reject(new Error("Connection timeout")),
+      () => {
+        console.log(`[Chat] ⏱️ Timeout reached after ${timeoutMs}ms`);
+        reject(new Error("Connection timeout"));
+      },
       timeoutMs
     );
   });
 
   return Promise.race([joinPromise, timeoutPromise])
-    .finally(() => clearTimeout(timer))
+    .finally(() => {
+      clearTimeout(timer);
+      const elapsed = performance.now() - startTime;
+      console.log(`[Chat] joinWithTimeout completed in ${elapsed.toFixed(0)}ms`);
+    })
     .catch((err) => {
       // 패배한 joinPromise 정리
       joinPromise.then((s) => s.leave()).catch(() => {});
@@ -52,36 +74,42 @@ export async function joinWithTimeout(
 export async function connectWithRetry(
   roomId: string,
   updateStatus: (s: ConnectionStatus) => void,
-  { maxAttempts = 3, initialTimeout = 4_000, maxTimeout = 8_000 } = {}
+  { maxAttempts = 3, initialTimeout = 2_000, maxTimeout = 8_000 } = {}
 ): Promise<MultisynqSession<any>> {
+  console.log(`[Chat] connectWithRetry started for room: ${roomId}`);
+  const overallStart = performance.now();
   const attemptId = (activeAttemptId.get(roomId) ?? 0) + 1;
   activeAttemptId.set(roomId, attemptId);
   const isStale = () => activeAttemptId.get(roomId) !== attemptId;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const timeout = Math.min(initialTimeout * attempt, maxTimeout);
+    console.log(`[Chat] Attempt ${attempt}/${maxAttempts} with timeout: ${timeout}ms`);
     updateStatus(attempt === 1 ? "connecting" : "reconnecting");
 
     try {
-      const s = await joinWithTimeout(
-        roomId,
-        Math.min(initialTimeout * attempt, maxTimeout)
-      );
+      const s = await joinWithTimeout(roomId, timeout);
 
       if (isStale()) {
         s.leave();
         throw new Error("Stale attempt discarded");
       }
       updateStatus("connected");
+      const totalElapsed = performance.now() - overallStart;
+      console.log(`[Chat] 🎉 Total connection time: ${totalElapsed.toFixed(0)}ms`);
       return s;
     } catch (err) {
+      console.log(`[Chat] Attempt ${attempt} failed:`, err);
       if (isStale()) throw err;
       if (attempt === maxAttempts) {
         updateStatus("failed");
+        const totalElapsed = performance.now() - overallStart;
+        console.log(`[Chat] 💔 Failed after ${totalElapsed.toFixed(0)}ms`);
         throw err;
       }
-      await new Promise((r) =>
-        setTimeout(r, Math.min(1_000 * 2 ** (attempt - 1), 2_000))
-      );
+      const delay = Math.min(1_000 * 2 ** (attempt - 1), 2_000);
+      console.log(`[Chat] Waiting ${delay}ms before retry...`);
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
   throw new Error("Unreachable");
