@@ -52,7 +52,7 @@ export async function joinWithTimeout(
 export async function connectWithRetry(
   roomId: string,
   updateStatus: (s: ConnectionStatus) => void,
-  { maxAttempts = 2, initialTimeout = 5_000, maxTimeout = 8_000 } = {}
+  { maxAttempts = 2, initialTimeout = 3_000, maxTimeout = 8_000 } = {}
 ): Promise<MultisynqSession<any>> {
   const attemptId = (activeAttemptId.get(roomId) ?? 0) + 1;
   activeAttemptId.set(roomId, attemptId);

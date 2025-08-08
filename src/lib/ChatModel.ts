@@ -56,7 +56,7 @@ export class ChatModel extends Model {
     this.cleanupTimer = setTimeout(() => {
       this.cleanupOldData();
       this.scheduleCleanup(); // 다음 정리 예약
-    }, checkInterval) as any;
+    }, checkInterval);
   }
 
   private cleanupOldData(): void {

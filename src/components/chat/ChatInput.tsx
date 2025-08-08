@@ -36,10 +36,9 @@ export const ChatInput = memo(function ChatInput({
       } as React.ChangeEvent<HTMLInputElement>);
 
       const newCursorPos = start + emoji.length;
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(newCursorPos, newCursorPos);
-      }, 0);
+      // setTimeout 제거 - 메모리 누수 방지
+      textarea.focus();
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
     },
     [value, onChange, disabled]
   );

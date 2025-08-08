@@ -65,7 +65,11 @@ export const useChatSessionStore = create<ChatSessionStore>((set, get) => ({
       const { [roomId]: _s, ...restStatus } = state.connectionStatus;
       set({ cache: restCache, connectionStatus: restStatus });
     } else {
-      entry.session.view.detach();
+      try {
+        entry.session.view.detach();
+      } catch (e) {
+        // detach 실패 무시
+      }
       set({
         cache: { ...state.cache, [roomId]: { ...entry, refs } },
       });
