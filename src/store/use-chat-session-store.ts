@@ -59,7 +59,7 @@ export const useChatSessionStore = create<ChatSessionStore>((set, get) => ({
       try {
         entry.session.leave();
       } catch (e) {
-        console.error("[ChatSessionStore] leave() error:", e);
+        // 세션 종료 실패는 무시
       }
       const { [roomId]: _c, ...restCache } = state.cache;
       const { [roomId]: _s, ...restStatus } = state.connectionStatus;

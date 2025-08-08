@@ -40,34 +40,42 @@ export class ChatModel extends Model {
   }
 
   private startPeriodicCleanup() {
-    // 5분마다 오래된 데이터 정리
-    this.cleanupTimer = setInterval(() => {
+    // 메시지 수가 많을 때만 정리 작업 실행
+    // 정리 주기를 동적으로 조정
+    this.scheduleCleanup();
+  }
+
+  private scheduleCleanup() {
+    // 메시지가 80개 이상이면 즉시 정리, 아니면 5분 후 재확인
+    const checkInterval = this.history.length > 80 ? 0 : 5 * 60 * 1000;
+    
+    if (this.cleanupTimer) {
+      clearTimeout(this.cleanupTimer);
+    }
+    
+    this.cleanupTimer = setTimeout(() => {
       this.cleanupOldData();
-    }, 5 * 60 * 1000);
+      this.scheduleCleanup(); // 다음 정리 예약
+    }, checkInterval) as any;
   }
 
   private cleanupOldData(): void {
-    const now: number    = this.now();                   // Croquet 가상시간은 number
-    const maxAge: number = 30 * 60 * 1000;             // 30분 (밀리초)
-
-    // 비활성 사용자 정리
-    for (const viewId of this.views.keys()) {
-      // now( number ) - lastPostTime( number ) 이므로 TS 에러 없음
-      if (now - (this.lastPostTime || 0) > maxAge) {
-        this.views.delete(viewId);
-        this.viewColors.delete(viewId);
-      }
-    }
-
-    // 채팅 히스토리 관리
-    const historyMax = CHAT_LIMITS.MESSAGE_HISTORY_MAX; 
-    if (this.history.length > historyMax * 0.8) {
-      const removeCount: number = Math.floor(this.history.length * 0.2);
+    const MAX_MESSAGES = 100; // 최대 100개 메시지만 유지
+    const OPTIMAL_MESSAGES = 80; // 정리 후 80개 유지
+    
+    // 메시지 수 기반 정리
+    if (this.history.length > MAX_MESSAGES) {
+      // 오래된 메시지부터 삭제하여 OPTIMAL_MESSAGES 개만 유지
+      const keepCount = OPTIMAL_MESSAGES;
+      const removeCount = this.history.length - keepCount;
+      
       this.history.splice(0, removeCount);
+      
+      // 전체 리프레시 알림
+      this.publish("history", "refresh");
     }
-
-    // 다음 실행 예약 (예: 5분 후)
-    this.future(5 * 60 * 1000, "cleanupOldData");
+    
+    // 비활성 사용자 정리는 제거 (Multisynq가 viewExit으로 알아서 처리)
   }
 
   private randomColor(): string {
@@ -122,14 +130,21 @@ export class ChatModel extends Model {
   }
 
   addToHistory(item: { viewId: string; html: string }) {
+    const MAX_MESSAGES = 100; // 최대 100개 메시지
+    
     this.history.push(item);
 
-    // 메시지 히스토리 관리 및 이벤트 발행
-    if (this.history.length > CHAT_LIMITS.MESSAGE_HISTORY_MAX) {
-      const removeCount = Math.floor(CHAT_LIMITS.MESSAGE_HISTORY_MAX * 0.1);
+    // 메시지 수가 최대치를 넘으면 즉시 정리
+    if (this.history.length > MAX_MESSAGES) {
+      // 오래된 메시지 20개 삭제 (버퍼 유지)
+      const removeCount = 20;
       this.history.splice(0, removeCount);
-      // 메시지 삭제 시에만 전체 리프레시
+      
+      // 메시지 삭제 시 전체 리프레시
       this.publish("history", "refresh");
+      
+      // 정리 스케줄 재조정
+      this.scheduleCleanup();
     } else {
       // 새 메시지 추가 시에는 개별 이벤트 발행
       this.publish("history", "newMessage", item);
@@ -146,7 +161,7 @@ export class ChatModel extends Model {
   cleanup() {
     if (this.cleanupTimer) {
       if (this.participants > 0) return;
-      clearInterval(this.cleanupTimer);
+      clearTimeout(this.cleanupTimer);
       this.cleanupTimer = null;
     }
 
